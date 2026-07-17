@@ -1,0 +1,5 @@
+.DS_Store
+venv/
+server/venv/
+frontend/node_modules
+AGENTS.md

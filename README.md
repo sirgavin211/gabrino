@@ -29,4 +29,25 @@ want. I'm not all annoying though, so I built some functions to help her through
 
 ## How to recreate Gabrino, using your own CAD design, but same circuitry and code
 
+You will need to purchase all the parts and CAD your own model, but here's the electrical setup.
+
+1. Copy the schematic below. <br/>
 <img src="schematic.png" alt="schematic" width="180" height="180" border="10"/>
+
+2. Clone this project <br/>
+3. Upload the code via [Arduino IDE](https://support.arduino.cc/hc/en-us/articles/360019833020-Download-and-install-Arduino-IDE) <br/>
+4. Run the Flask API server <br/>
+
+``` bash
+cd server
+python3 -m venv ./venv
+source venv/bin/activate
+pip3 install -r requirements.txt
+python3 app.py
+```
+5. Run the frontend
+``` bash
+cd frontend
+npm run dev
+```
+

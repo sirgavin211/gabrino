@@ -1,6 +1,7 @@
+#include "WString.h"
 
 
-#include "MotorController.h"
+#include "motor_controller.h"
 #include <Arduino.h>
 
 MotorController::MotorController(int PWMA, int AIN1, int AIN2, int PWMB, int BIN1, int BIN2, int freq, int res){
@@ -14,6 +15,10 @@ MotorController::MotorController(int PWMA, int AIN1, int AIN2, int PWMB, int BIN
 
   ledcAttachChannel(pwmA, freq, res, 0);
   ledcAttachChannel(pwmB, freq, res, 0);
+
+  Serial.println(String("Motor Controller running on pins -> ") +
+                "PWMA:" + pwmA + " AIN1:" + ain1 + " AIN2:" + ain2 +
+                " PWMB:" + pwmB + " BIN1:" + bin1 + " BIN2:" + bin2);
 
 }
 
@@ -56,7 +61,7 @@ void MotorController::setSpeed(int speed){
 }
 
 void MotorController::decreaseSpeed(){
-  int new_speed = speed + 255/10;
+  int new_speed = speed - 255/10;
 
   if(new_speed < 0){
     new_speed = 0;

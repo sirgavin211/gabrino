@@ -3,3 +3,4 @@ venv/
 server/venv/
 frontend/node_modules
 AGENTS.md
+firmware/config.h

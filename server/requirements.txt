@@ -1,0 +1,8 @@
+flask
+websockets
+simpleaudio
+numpy 
+sounddevice
+pydub
+audioop-lts
+

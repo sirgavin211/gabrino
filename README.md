@@ -2,9 +2,9 @@
 ### *A robot assistant capable of communicating with its users, and connecting college students to their family back home.*
 
 [![Status](https://img.shields.io/badge/status-work%20in%20progress-yellow)]()
-[![Made with C++](https://img.shields.io/badge/firmware-C%2B%2B-00599C)]()
-[![Frontend](https://img.shields.io/badge/frontend-React%20%2B%20Vite-61DAFB)]()
-[![Backend](https://img.shields.io/badge/backend-Flask-black)]()
+[![Made with C++](https://img.shields.io/badge/firmware-C%2B%2B-F24B7D)]()
+[![Frontend](https://img.shields.io/badge/frontend-Typescript-3278CA)]()
+[![Backend](https://img.shields.io/badge/backend-Python-3671A4)]()
 
 ---
 

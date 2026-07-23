@@ -3,6 +3,11 @@
 #ifndef MOTOR_CONTROLLER_H
 #define MOTOR_CONTROLLER_H
 
+#include <ArduinoWebsocket.h>
+#include <Arduino.h>
+
+using namespace websocket;
+
 class MotorController{
 
 public:
@@ -18,6 +23,8 @@ public:
   void setSpeed(int speed);
   void increaseSpeed();
   void decreaseSpeed();
+
+  void onMessageCallback(WebsocketsMessage message);
 
 private:
   int speed;

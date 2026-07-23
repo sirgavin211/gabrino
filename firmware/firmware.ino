@@ -9,7 +9,6 @@
 
 MotorController controller(PWMA, AIN1, AIN2, PWMB, BIN1, BIN2, freq, res);
 AudioController audio(MIC_WS, MIC_SCK, MIC_SD, SPEAKER_BCLK, SPEAKER_LRCLK, SPEAKER_DIN, server_host, server_port, false);
-// Mouth mouth(SPEAKER_BCLK, SPEAKER_LRCLK, SPEAKER_DIN, false, server_host, port);
 
 
 
@@ -68,8 +67,9 @@ void loop() {
 
   }
 
-  // audio.loop();
-  audio.send();
+  audio.loop();
+  // audio.send();
 
 
 }
+

@@ -9,6 +9,9 @@
 using namespace websockets;
 
 #define MAX_AUDIO_BUFFER 64000 
+#define SAMPLE_RATE 16000
+#define SAMPLE_BITS I2S_DATA_BIT_WIDTH_16BIT
+#define BUFFER_SIZE   1024
 
 
 enum SystemState{
@@ -24,6 +27,7 @@ public:
   void send();
   void play();
   void loop();
+  void onMessageCallback(WebsocketsMessage message);
   
 private:
   int ws, sck, sd;
@@ -38,9 +42,6 @@ private:
 
   void setupMicI2S();
   void setupSpeakerI2S();
-
-  void onMessageCallback(WebsocketsMessage message);
-  void onEventsCallback(WebsocketsEvent event, String data);
 
   i2s_chan_handle_t rx_handle = NULL;
   i2s_chan_handle_t tx_handle = NULL;

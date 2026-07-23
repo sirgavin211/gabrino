@@ -2,13 +2,6 @@
 
 
 
-#define SAMPLE_RATE 16000
-#define SAMPLE_BITS I2S_DATA_BIT_WIDTH_16BIT
-#define BUFFER_SIZE   1024
-
-
-
-
 using namespace websockets;
 
 
@@ -18,6 +11,7 @@ AudioController::AudioController(int ws, int sck, int sd, int bclk, int lrc, int
   this->bclk=bclk; this->lrc=lrc; this->din=din;
 
   recording = false;
+  currentState = IDLE;
   ws_url = String("ws://") + host + ":" + String(port);
   this->debug = debug;
 }
@@ -80,9 +74,9 @@ void AudioController::send(){
     }
 
     Serial.println();
-    
     Serial.println("Successfully reconnected to audio websocket.");
   }
+
 }
 
 void AudioController::play(){
@@ -93,15 +87,20 @@ void AudioController::play(){
 
 
 void AudioController::loop() {
+  if (client.available()) {
+    client.poll();
+  }
+
   if (currentState != PLAYING || audioDataSize == 0) return;
-  
+
   size_t bytesWritten;
   size_t bytesToWrite = min((size_t)BUFFER_SIZE * 2, (size_t)audioDataSize);
   
   esp_err_t result = i2s_channel_write(tx_handle, audioData, bytesToWrite, &bytesWritten, 100);
-  
+  Serial.printf("write result=%d bytesToWrite=%d bytesWritten=%d audioDataSize=%d\n",
+            result, bytesToWrite, bytesWritten, audioDataSize);
   if (result == ESP_OK && bytesWritten > 0) {
-    // Shift remaining data
+
     audioDataSize -= bytesWritten;
     if (audioDataSize > 0) {
       memmove(audioData, audioData + bytesWritten, audioDataSize);
@@ -110,6 +109,9 @@ void AudioController::loop() {
       Serial.println("Playback finished!");
       currentState = IDLE;
     }
+  
+  }else{
+    Serial.printf("I2S write failed: %d, bytesWritten=%d\n", result, bytesWritten);
   }
 }
 
@@ -124,42 +126,25 @@ void AudioController::onMessageCallback(WebsocketsMessage message)
     DynamicJsonDocument doc(1024);
     deserializeJson(doc, message.data());
     
-    String type = doc["type"];
-    
-    
+    String status = doc["status"];
+    y
+    Serial.println(status);
   } 
   else if (message.isBinary()) {
-
-    // Receiving audio data back from server
     Serial.println("Receiving audio data from server...");
-    
     size_t dataSize = message.length();
-    if (dataSize <= MAX_AUDIO_BUFFER) {
-      memcpy(audioData, message.c_str(), dataSize);
-      audioDataSize = dataSize;
+
+    if (audioDataSize + dataSize <= MAX_AUDIO_BUFFER) {
+      memcpy(audioData + audioDataSize, message.c_str(), dataSize); 
+      audioDataSize += dataSize;                                     
       currentState = PLAYING;
-      Serial.println("Starting playback...");
+      Serial.printf("First bytes: %02X %02X %02X %02X\n", audioData[0], audioData[1], audioData[2], audioData[3]);
     } else {
-      Serial.println("Error: Audio data too large");
+      Serial.println("Error: Audio buffer full, dropping chunk");
     }
   }
 }
 
-void AudioController::onEventsCallback(WebsocketsEvent event, String data) 
-{
-  if (event == WebsocketsEvent::ConnectionOpened) {
-    Serial.println("WebSocket Connected!");
-  } 
-  else if (event == WebsocketsEvent::ConnectionClosed) {
-    Serial.println("WebSocket Disconnected!");
-  } 
-  else if (event == WebsocketsEvent::GotPing) {
-    Serial.println("Got ping from server!");
-  } 
-  else if (event == WebsocketsEvent::GotPong) {
-    Serial.println("Got pong from server!");
-  }
-}
 
 
 

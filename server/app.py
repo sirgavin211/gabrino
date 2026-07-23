@@ -7,6 +7,8 @@ import sounddevice as sd
 import time
 import io
 from pydub import AudioSegment
+import json
+
 
 app = Flask(__name__)
 
@@ -27,6 +29,14 @@ async def ping_loop(websocket):
     except:
         pass
 
+def is_json(message):
+    try:
+        return json.load(message)
+    except:
+        return False
+
+
+
 
 async def handle_websocket(websocket):
     global audio_buffer
@@ -40,9 +50,24 @@ async def handle_websocket(websocket):
                 audio_buffer.append(message)
 
             elif isinstance(message, str):
+
+                data = is_json(message)
+
+                if(data):
+                    
+                    # send movement direction straight to gabrino
+                    if(data["type"] == "movement"):
+                        websocket.send(message)
+
+
+
                 print(f"[DEBUG] Received text message: {message}")
+
                 if(message == "send_audio"):
+                    await websocket.send(json.dumps({"status": "test"}))
                     await send_audio(websocket, "1.mp3")
+
+            
 
     except websockets.exceptions.ConnectionClosed:
         print("[DEBUG] WebSocket connection closed")
@@ -57,32 +82,52 @@ async def websocket_server_main():
         await asyncio.Future()
 
 
+def mp3_to_pcm16k_mono(mp3_path):
+    audio = AudioSegment.from_mp3(mp3_path)
+    audio = audio.set_frame_rate(16000).set_channels(1).set_sample_width(2)  # 2 bytes = 16-bit
+    print(f"Max abs sample: {max(abs(s) for s in audio.get_array_of_samples()[:1000])}")
+    print(f"dBFS: {audio.dBFS}")   
 
-async def send_audio(websocket, filepath):
-    filename = filepath.split('/')[-1]
+    return audio.raw_data  # raw PCM bytes, no WAV header
 
-    
-    audio = AudioSegment.from_file(filepath)
+async def send_audio(websocket, path):
+    pcm_bytes = mp3_to_pcm16k_mono(path)
 
-    # Convert to match ESP32 I2S config: 16kHz, mono, 16-bit PCM
-    audio = audio.set_frame_rate(16000)
-    audio = audio.set_channels(1)
-    audio = audio.set_sample_width(2)  
-
-    raw_pcm = audio.raw_data
-
-    chunk_size = 4096  # 4KB chunks
-    stream = io.BytesIO(raw_pcm)
-
-    while True:
-        chunk = stream.read(chunk_size)
-        if not chunk:
-            break
+    print(f"PCM length: {len(pcm_bytes)}")
+    print(f"First 16 bytes: {pcm_bytes[:16].hex()}")
+    for i in range(0, len(pcm_bytes), 4096):
+        chunk = pcm_bytes[i:i + 4096]
         await websocket.send(chunk)
-        await asyncio.sleep(0.01)  # Small delay to prevent overwhelming
 
-    print(f"Sent audio file back to client: {filename}")
-
+    await websocket.send("EOF")
+#
+#
+# async def send_audio(websocket, filepath):
+#     filename = filepath.split('/')[-1]
+#
+#     audio = AudioSegment.from_file(filepath)
+#
+#     # Convert to match ESP32 I2S config: 16kHz, mono, 16-bit PCM
+#     audio = audio.set_frame_rate(16000)
+#     audio = audio.set_channels(1)
+#     audio = audio.set_sample_width(2)  
+#
+#     raw_pcm = audio.raw_data
+#
+#     chunk_size = 4096  # 4KB chunks
+#     stream = io.BytesIO(raw_pcm)
+#
+#     while True:
+#         chunk = stream.read(chunk_size)
+#         if not chunk:
+#             break
+#         print(f"Sent chunk of size {chunk}")
+#         await websocket.send(chunk)
+#         await asyncio.sleep(0.01)  # Small delay to prevent overwhelming
+#
+#     print(f"Sent audio file back to client: {filename}")
+#
+#
 
 
 

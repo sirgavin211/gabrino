@@ -1,8 +1,6 @@
-#include "WString.h"
-
 
 #include "motor_controller.h"
-#include <Arduino.h>
+
 
 MotorController::MotorController(int PWMA, int AIN1, int AIN2, int PWMB, int BIN1, int BIN2, int freq, int res){
   
@@ -21,6 +19,41 @@ MotorController::MotorController(int PWMA, int AIN1, int AIN2, int PWMB, int BIN
                 " PWMB:" + pwmB + " BIN1:" + bin1 + " BIN2:" + bin2);
 
 }
+
+
+void MotorController::onMessageCallback(WebsocketsMessage message){
+  if (message.isText()) {
+    DynamicJsonDocument doc(1024);
+    deserializeJson(doc, message.data());
+    
+    String type = doc["type"];
+    
+    if(type == "movement"){
+      String type = doc["direction"];
+
+      if(type == "forward"){
+        forward();
+      }
+
+      if(type == "reverse"){
+        reverse();
+      }
+      if(type == "left"){
+        left();
+      }
+      if(type == "right"){
+        right();
+      }
+      if(type == "brake"){
+        brake();
+      }
+    }
+  } 
+  
+}
+
+
+
 
 void MotorController::forward(){
   digitalWrite(ain1, HIGH);

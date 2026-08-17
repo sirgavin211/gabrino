@@ -39,10 +39,11 @@ def _token_from_request():
         return auth_header[len("Bearer "):].strip()
     return None
 
+
 SAMPLE_RATE = 16000
 CHANNELS = 1
-SAMPLE_WIDTH = 2
-
+SAMPLE_WIDTH = 2  # bytes — 16-bit PCM
+CHUNK_BYTES = 4096
 
 audio_buffer = deque()
 
@@ -63,21 +64,21 @@ async def broadcast_movement(sender, message):
 
 
 async def ping_loop(websocket):
-    """Send periodic pings to keep connection alive."""
+    """Send periodic pings to keep the connection alive."""
     try:
         while True:
             await websocket.ping()
             await asyncio.sleep(20)
-    except:
+    except websockets.exceptions.ConnectionClosed:
         pass
 
-def is_json(message):
+
+def parse_json(message):
+    """Parse a JSON message, or return None if it isn't valid JSON."""
     try:
         return json.loads(message)
-    except:
-        return False
-
-
+    except json.JSONDecodeError:
+        return None
 
 
 def _token_from_ws(websocket):
@@ -90,8 +91,6 @@ def _token_from_ws(websocket):
 
 
 async def handle_websocket(websocket):
-    global audio_buffer
-
     # Require a valid session (or device) token before doing anything.
     user = auth.verify_token(_token_from_ws(websocket))
     if not user:
@@ -105,33 +104,24 @@ async def handle_websocket(websocket):
 
     try:
         async for message in websocket:
-
             if isinstance(message, bytes):
                 audio_buffer.append(message)
+                continue
 
-            elif isinstance(message, str):
+            data = parse_json(message)
+            # Relay control commands (movement + speed) straight to gabrino.
+            if data and data.get("type") in ("movement", "speed"):
+                print(f"[DEBUG] control: {data}")
+                await broadcast_movement(websocket, message)
+                continue
 
-                data = is_json(message)
-
-                if(data):
-
-                    # relay control commands (movement + speed) straight to gabrino
-                    if(data.get("type") in ("movement", "speed")):
-                        print(f"[DEBUG] control: {data}")
-                        await broadcast_movement(websocket, message)
-                        continue
-
-                print(f"[DEBUG] Received text message: {message}")
-
-                if(message == "send_audio"):
-                    await websocket.send(json.dumps({"status": "test"}))
-                    await send_audio(websocket, "1.mp3")
-
-
+            print(f"[DEBUG] Received text message: {message}")
+            if message == "send_audio":
+                await websocket.send(json.dumps({"status": "test"}))
+                await send_audio(websocket, "1.mp3")
 
     except websockets.exceptions.ConnectionClosed:
         print("[DEBUG] WebSocket connection closed")
-
     except Exception as e:
         print(f"[ERROR] WebSocket error: {e}")
     finally:
@@ -145,52 +135,17 @@ async def websocket_server_main():
 
 
 def mp3_to_pcm16k_mono(mp3_path):
+    """Decode an MP3 to raw 16kHz mono 16-bit PCM (no WAV header)."""
     audio = AudioSegment.from_mp3(mp3_path)
-    audio = audio.set_frame_rate(16000).set_channels(1).set_sample_width(2)  # 2 bytes = 16-bit
-    print(f"Max abs sample: {max(abs(s) for s in audio.get_array_of_samples()[:1000])}")
-    print(f"dBFS: {audio.dBFS}")   
+    audio = audio.set_frame_rate(SAMPLE_RATE).set_channels(CHANNELS).set_sample_width(SAMPLE_WIDTH)
+    return audio.raw_data
 
-    return audio.raw_data  # raw PCM bytes, no WAV header
 
 async def send_audio(websocket, path):
     pcm_bytes = mp3_to_pcm16k_mono(path)
-
-    print(f"PCM length: {len(pcm_bytes)}")
-    print(f"First 16 bytes: {pcm_bytes[:16].hex()}")
-    for i in range(0, len(pcm_bytes), 4096):
-        chunk = pcm_bytes[i:i + 4096]
-        await websocket.send(chunk)
-
+    for i in range(0, len(pcm_bytes), CHUNK_BYTES):
+        await websocket.send(pcm_bytes[i:i + CHUNK_BYTES])
     await websocket.send("EOF")
-#
-#
-# async def send_audio(websocket, filepath):
-#     filename = filepath.split('/')[-1]
-#
-#     audio = AudioSegment.from_file(filepath)
-#
-#     # Convert to match ESP32 I2S config: 16kHz, mono, 16-bit PCM
-#     audio = audio.set_frame_rate(16000)
-#     audio = audio.set_channels(1)
-#     audio = audio.set_sample_width(2)  
-#
-#     raw_pcm = audio.raw_data
-#
-#     chunk_size = 4096  # 4KB chunks
-#     stream = io.BytesIO(raw_pcm)
-#
-#     while True:
-#         chunk = stream.read(chunk_size)
-#         if not chunk:
-#             break
-#         print(f"Sent chunk of size {chunk}")
-#         await websocket.send(chunk)
-#         await asyncio.sleep(0.01)  # Small delay to prevent overwhelming
-#
-#     print(f"Sent audio file back to client: {filename}")
-#
-#
-
 
 
 def start_websocket_server():
@@ -211,10 +166,7 @@ def play_captured_audio():
         if len(audio_buffer) == 0:
             time.sleep(0.005)
             continue
-        audio_data = audio_buffer.popleft()
-        stream.write(audio_data) 
-
-
+        stream.write(audio_buffer.popleft())
 
 
 @app.route("/login", methods=["POST", "OPTIONS"])
@@ -267,9 +219,3 @@ if __name__ == '__main__':
     print("[DEBUG] Starting Flask HTTP server on port 5000...")
     print("WS Thread and Audio Thread running.")
     app.run(host='0.0.0.0', port=5000, debug=False)
-
-
-
-
-
-

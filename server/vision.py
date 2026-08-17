@@ -1,4 +1,3 @@
-import os
 import socket
 import time
 from collections import deque
@@ -10,28 +9,21 @@ import numpy as np
 UDP_IP = "0.0.0.0"
 UDP_PORT = 2222
 
-# Create socket with larger buffer
-sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-sock.bind((UDP_IP, UDP_PORT))
-sock.setsockopt(socket.SOL_SOCKET, socket.SO_RCVBUF, 4 * 1024 * 1024)  # 4MB buffer
-sock.settimeout(0.01)  # 10ms timeout for responsive loop
+RECV_BUF_BYTES = 4 * 1024 * 1024   # 4MB kernel receive buffer
+SOCKET_TIMEOUT_S = 0.01            # 10ms — keeps the loop responsive
+MAX_PACKET_BYTES = 3000            # payload packets larger than this are junk
+WINDOW = "ESP32-CAM Stream"
 
-buf = b""
-frame_len = 0
-
-frame_count = 0
-dropped_frames = 0
-crc_errors = 0
-start_time = time.time()
-last_frame_time = time.time()
-fps_samples = deque(maxlen=30)
-last_status_update = time.time()
-
-print(f"Listening on UDP port {UDP_PORT}...")
-print("Optimized for packet loss handling")
+# HUD colors (BGR).
+GREEN = (0, 255, 0)
+ORANGE = (0, 165, 255)
+RED = (0, 0, 255)
+YELLOW = (255, 255, 0)
+WHITE = (255, 255, 255)
+GREY = (180, 180, 180)
 
 
-def crc16(data: bytes):
+def crc16(data: bytes) -> int:
     crc = 0xFFFF
     for byte in data:
         crc ^= byte
@@ -40,85 +32,62 @@ def crc16(data: bytes):
     return crc & 0xFFFF
 
 
-cv2.namedWindow("ESP32-CAM Stream", cv2.WINDOW_NORMAL)
+def draw_text(img, text, pos, scale, color, thickness=2):
+    cv2.putText(img, text, pos, cv2.FONT_HERSHEY_SIMPLEX, scale, color, thickness)
 
 
-#send test mp3 to hardware
+def make_socket():
+    sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    sock.bind((UDP_IP, UDP_PORT))
+    sock.setsockopt(socket.SOL_SOCKET, socket.SO_RCVBUF, RECV_BUF_BYTES)
+    sock.settimeout(SOCKET_TIMEOUT_S)
+    return sock
+
+
 def handle_window_key() -> bool:
-
-    key = cv2.waitKey(1) & 0xFF
-
-    if key == 27:  # ESC to exit
-        return True
-    if key == ord("s"):
-        pass
-    return False
+    """True when the user pressed ESC (exit)."""
+    return (cv2.waitKey(1) & 0xFF) == 27
 
 
-def show_no_video_placeholder(
-    test_mp3_path: str,
-    seconds_since_frame: float,
-) -> bool:
+def show_no_video_placeholder(seconds_since_frame: float) -> bool:
     img = np.zeros((480, 640, 3), dtype=np.uint8)
-
-    cv2.putText(
-        img,
-        "No video frames received",
-        (20, 80),
-        cv2.FONT_HERSHEY_SIMPLEX,
-        0.9,
-        (255, 255, 255),
-        2,
-    )
-    cv2.putText(
-        img,
-        f"Waiting: {seconds_since_frame:.1f}s",
-        (20, 120),
-        cv2.FONT_HERSHEY_SIMPLEX,
-        0.7,
-        (180, 180, 180),
-        2,
-    )
-    cv2.putText(
-        img,
-        "Press 's' to send test.mp3",
-        (20, 220),
-        cv2.FONT_HERSHEY_SIMPLEX,
-        0.7,
-        (255, 255, 0),
-        2,
-    )
-    cv2.putText(
-        img,
-        "Press ESC to exit",
-        (20, 260),
-        cv2.FONT_HERSHEY_SIMPLEX,
-        0.7,
-        (255, 255, 255),
-        2,
-    )
-
-    cv2.imshow("ESP32-CAM Stream", img)
-
+    draw_text(img, "No video frames received", (20, 80), 0.9, WHITE)
+    draw_text(img, f"Waiting: {seconds_since_frame:.1f}s", (20, 120), 0.7, GREY)
+    draw_text(img, "Press 's' to send test.mp3", (20, 220), 0.7, YELLOW)
+    draw_text(img, "Press ESC to exit", (20, 260), 0.7, WHITE)
+    cv2.imshow(WINDOW, img)
     return handle_window_key()
 
 
+def draw_stats(img, fps, loss_rate):
+    loss_color = GREEN if loss_rate < 5 else ORANGE if loss_rate < 15 else RED
+    draw_text(img, f"FPS: {fps:.1f}", (10, 30), 0.8, GREEN)
+    draw_text(img, f"Resolution: {img.shape[1]}x{img.shape[0]}", (10, 60), 0.6, GREEN)
+    draw_text(img, f"Loss: {loss_rate:.1f}%", (10, 90), 0.6, loss_color)
+    draw_text(img, "Press 's' to send test.mp3", (10, 150), 0.6, YELLOW)
+    if loss_rate > 15:
+        draw_text(img, "HIGH PACKET LOSS!", (10, 180), 0.7, RED)
+
+
 def main():
-    global last_frame_time
-    global buf
-    global frame_len
-    global dropped_frames
-    global crc_errors
-    global frame_count
-    global last_status_update
+    sock = make_socket()
+    cv2.namedWindow(WINDOW, cv2.WINDOW_NORMAL)
 
-    expected_crc = None
+    print(f"Listening on UDP port {UDP_PORT}...")
+    print("Optimized for packet loss handling")
 
-    test_mp3_path = os.path.join(os.path.dirname(__file__), "test.mp3")
+    buf = b""
+    frame_len = 0
+    frame_count = 0
+    dropped_frames = 0
+    crc_errors = 0
+
+    start_time = time.time()
+    last_frame_time = time.time()
+    last_status_update = time.time()
     last_placeholder_draw = 0.0
     last_no_data_log = 0.0
-
-    print("Press 's' in stream window to send test.mp3 play request to hardware")
+    fps_samples = deque(maxlen=30)
 
     while True:
         try:
@@ -130,154 +99,81 @@ def main():
                 if now - last_no_data_log > 2.0:
                     print("No data received for 2 seconds - waiting...")
                     last_no_data_log = now
-
                 if now - last_placeholder_draw >= 0.05:
-                    if show_no_video_placeholder( test_mp3_path, seconds_since_frame):
+                    if show_no_video_placeholder(seconds_since_frame):
                         break
                     last_placeholder_draw = now
             continue
-        except Exception as e:
+        except OSError as e:
             print(f"Socket error: {e}")
             continue
 
-        # Header packet (4 bytes = frame length)
+        # Header packet (4 bytes = frame length) — starts a new frame.
         if len(data) == 4:
             frame_len = int.from_bytes(data, "little")
             buf = b""
-            expected_crc = None
             continue
 
-        # CRC packet (2 bytes = CRC16)
+        # CRC packet (2 bytes = CRC16) — closes out the current frame.
         if len(data) == 2 and frame_len > 0:
             expected_crc = int.from_bytes(data, "little")
 
-            if len(buf) == frame_len:
-                actual_crc = crc16(buf)
+            if len(buf) == frame_len and crc16(buf) == expected_crc:
+                img = cv2.imdecode(np.frombuffer(buf, dtype=np.uint8), cv2.IMREAD_COLOR)
+                if img is not None:
+                    now = time.time()
+                    frame_time = now - last_frame_time
+                    last_frame_time = now
+                    if frame_time > 0:
+                        fps_samples.append(1.0 / frame_time)
+                    fps = sum(fps_samples) / len(fps_samples) if fps_samples else 0
+                    frame_count += 1
 
-                if actual_crc == expected_crc:
-                    arr = np.frombuffer(buf, dtype=np.uint8)
-                    img = cv2.imdecode(arr, cv2.IMREAD_COLOR)
+                    total = frame_count + dropped_frames + crc_errors
+                    loss_rate = (dropped_frames + crc_errors) / total * 100 if total else 0
 
-                    if img is not None:
-                        now = time.time()
-                        frame_time = now - last_frame_time
-                        last_frame_time = now
-
-                        if frame_time > 0:
-                            fps_samples.append(1.0 / frame_time)
-
-                        fps = sum(fps_samples) / len(fps_samples) if fps_samples else 0
-                        frame_count += 1
-
-                        total_attempts = frame_count + dropped_frames + crc_errors
-                        loss_rate = (
-                            (dropped_frames + crc_errors) / total_attempts * 100
-                            if total_attempts > 0
-                            else 0
-                        )
-
-                        cv2.putText(
-                            img,
-                            f"FPS: {fps:.1f}",
-                            (10, 30),
-                            cv2.FONT_HERSHEY_SIMPLEX,
-                            0.8,
-                            (0, 255, 0),
-                            2,
-                        )
-                        cv2.putText(
-                            img,
-                            f"Resolution: {img.shape[1]}x{img.shape[0]}",
-                            (10, 60),
-                            cv2.FONT_HERSHEY_SIMPLEX,
-                            0.6,
-                            (0, 255, 0),
-                            2,
-                        )
-                        cv2.putText(
-                            img,
-                            f"Loss: {loss_rate:.1f}%",
-                            (10, 90),
-                            cv2.FONT_HERSHEY_SIMPLEX,
-                            0.6,
-                            (0, 255, 0)
-                            if loss_rate < 5
-                            else (0, 165, 255)
-                            if loss_rate < 15
-                            else (0, 0, 255),
-                            2,
-                        )
-
-                        cv2.putText(
-                            img,
-                            "Press 's' to send test.mp3",
-                            (10, 150),
-                            cv2.FONT_HERSHEY_SIMPLEX,
-                            0.6,
-                            (255, 255, 0),
-                            2,
-                        )
-
-                        if loss_rate > 15:
-                            cv2.putText(
-                                img,
-                                "HIGH PACKET LOSS!",
-                                (10, 180),
-                                cv2.FONT_HERSHEY_SIMPLEX,
-                                0.7,
-                                (0, 0, 255),
-                                2,
-                            )
-
-                        cv2.imshow("ESP32-CAM Stream", img)
-
-                        if handle_window_key():
-                            break
-                else:
-                    crc_errors += 1
-                    if time.time() - last_status_update > 2.0:
-                        print(f"CRC error detected (total: {crc_errors})")
-                        last_status_update = time.time()
+                    draw_stats(img, fps, loss_rate)
+                    cv2.imshow(WINDOW, img)
+                    if handle_window_key():
+                        break
+            elif len(buf) == frame_len:
+                crc_errors += 1
+                if time.time() - last_status_update > 2.0:
+                    print(f"CRC error detected (total: {crc_errors})")
+                    last_status_update = time.time()
             else:
                 dropped_frames += 1
                 if time.time() - last_status_update > 2.0:
-                    print(
-                        f"Dropped incomplete frame (expected {frame_len}, got {len(buf)})"
-                    )
+                    print(f"Dropped incomplete frame (expected {frame_len}, got {len(buf)})")
                     last_status_update = time.time()
 
             frame_len = 0
             buf = b""
-            expected_crc = None
             continue
 
+        # Payload packet — accumulate into the current frame buffer.
         if frame_len > 0:
-            if len(data) > 3000:
+            if len(data) > MAX_PACKET_BYTES:
                 print(f"Warning: Dropping suspiciously large packet ({len(data)} bytes).")
                 continue
-
             buf += data
-
-            if len(buf) > frame_len * 1.5 + 10000 and frame_len > 0:
+            if len(buf) > frame_len * 1.5 + 10000:
                 print(f"Buffer overflow/runaway - resetting (got {len(buf)}, expected {frame_len})")
                 buf = b""
                 frame_len = 0
-                expected_crc = None
-                continue
 
     sock.close()
     cv2.destroyAllWindows()
 
     elapsed = time.time() - start_time
+    total = frame_count + dropped_frames + crc_errors
+    loss_rate = (dropped_frames + crc_errors) / total * 100 if total else 0
     print("\n--- Session Statistics ---")
     print(f"Total frames: {frame_count}")
     print(f"Dropped frames: {dropped_frames}")
     print(f"CRC errors: {crc_errors}")
     print(f"Average FPS: {frame_count / elapsed:.1f}")
-    print(
-        "Packet loss rate: "
-        f"{((dropped_frames + crc_errors) / (frame_count + dropped_frames + crc_errors) * 100):.1f}%"
-    )
+    print(f"Packet loss rate: {loss_rate:.1f}%")
 
 
 if __name__ == "__main__":

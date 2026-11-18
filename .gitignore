@@ -4,3 +4,7 @@ server/venv/
 frontend/node_modules
 AGENTS.md
 firmware/config.h
+config.h
+server/users.json
+server/.env
+.env

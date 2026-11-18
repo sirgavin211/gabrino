@@ -1,5 +1,5 @@
 # Gabrino — A Desktop Robot Assistant
-### *A robot assistant capable of communicating with its users, and connecting college students to their family back home.*
+### *A little robot that keeps a college student connected to the annoying little brother she left back home.*
 
 [![Status](https://img.shields.io/badge/status-work%20in%20progress-yellow)]()
 [![Made with C++](https://img.shields.io/badge/firmware-C%2B%2B-F24B7D)]()
@@ -10,18 +10,22 @@
 
 ## About
 
-This project was built as a gift for my sister, who is leaving for college in a few months. In order to continue the legacy of the annoying little brother, I built Gabrino. As my sister leaves for college, she can bring Gabrino with her, enabling me to hang out with her, tour UCLA, and annoy her whenever I want.
+I built Gabrino as a gift for my sister, who leaves for college in a few months. To keep the legacy of the annoying little brother alive, she can bring Gabrino with her — so I can hang out with her, tour UCLA, and bother her from home whenever I want.
 
-I'm not all annoying though, so I built some functions to help her throughout college:
+I'm not *all* annoying though, so I'm building in some functions to actually help her through college too.
 
-- 🎙️ **INMP441 microphone** — captures audio input
-- 🔊 **MAX98357A-driven speaker** — relays audio back to her
-- 🤖 **AI assistant** — answers quick questions and sets alarms
-- 🖥️ **1" OLED screen** — shows the time, weather, or any visual indicator
-- 🌐 **Flask API server** — connects her with me and the assistant
-- 📷 **High-quality camera stream** — to bother her whenever I want
-- 💻 **React + Vite frontend** — controls the robot
-- 📡 **Stationary ESP32 WiFi gateway** — lets her control Gabrino remotely
+### Features
+
+Legend: ✅ working · 🚧 in progress · 📋 planned
+
+- 🔊 ✅ **MAX98357A-driven speaker** — plays audio streamed back from the server
+- 🌐 ✅ **Flask API server** — the hub that connects her, me, and the robot
+- 💻 ✅ **React + Vite frontend** — drive the robot and watch the serial monitor
+- 🎙️ 🚧 **INMP441 microphone** — captures audio input (I2S streaming written, capture path not yet enabled)
+- 📷 📋 **High-quality camera stream** — to see (and bother) her whenever I want
+- 🤖 📋 **AI assistant** — answers quick questions and sets alarms
+- 🖥️ 📋 **1" OLED screen** — shows the time, weather, or any visual indicator
+- 📡 📋 **Stationary ESP32 WiFi gateway** — lets her control Gabrino remotely
 
 <p align="center">
   <img src="cad_preview.png" alt="Isn't he adorable" width="180" height="180" border="10" />
@@ -44,38 +48,44 @@ I'm not all annoying though, so I built some functions to help her throughout co
 
 ## Building Your Own Gabrino
 
-You will need to purchase all the parts and CAD your own model, but here's the electrical setup:
+You'll need to buy the parts and CAD your own model, but here's the electrical setup:
 
-1. **Copy the schematic below**
+**1. Copy the schematic below**
 
-   <img src="schematic.png" alt="schematic" width="1000" height="1000" border="10"/>
+<p align="center">
+  <img src="schematic.png" alt="schematic" width="700" border="10"/>
+</p>
 
-2. **Clone this project**
+**2. Clone this project**
+
 ```bash
-   git clone <repo-url>
+git clone <repo-url>
 ```
 
-3. **Upload the firmware** via [Arduino IDE](https://support.arduino.cc/hc/en-us/articles/360019833020-Download-and-install-Arduino-IDE)
+**3. Upload the firmware** via [Arduino IDE](https://support.arduino.cc/hc/en-us/articles/360019833020-Download-and-install-Arduino-IDE)
 
-4. **Run the Flask API server**
+**4. Run the Flask API server**
+
 ```bash
-   cd server
-   python3 -m venv ./venv
-   source venv/bin/activate
-   pip3 install -r requirements.txt
-   python3 app.py
+cd server
+python3 -m venv ./venv
+source venv/bin/activate
+pip3 install -r requirements.txt
+python3 app.py
 ```
 
-5. **Run the frontend**
+**5. Run the frontend**
+
 ```bash
-   cd frontend
-   npm run dev
+cd frontend
+npm install
+npm run dev
 ```
 
 ---
 
 ## Using This for Your Own Purposes
 
-For all my fellow little brothers out there — CAD your own robot, and give it to your sister, so you can annoy her.
+For all my fellow little brothers out there — CAD your own robot and give it to your sister, so you can annoy her too.
 
-For fellow developers — feel free to use my code whether you want to stream audio from the INMP441 to your server, or connect API servers to hardware projects.
+For fellow developers — feel free to use my code, whether you want to stream audio from an INMP441 to your server or wire an API server up to a hardware project.

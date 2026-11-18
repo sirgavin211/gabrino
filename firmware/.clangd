@@ -1,0 +1,9 @@
+CompileFlags:
+  # clangd can't parse xtensa GCC flags; target 32-bit ELF so ESP32 section attributes are valid
+  Remove: [-mlongcalls, -fstrict-volatile-bitfields, -fno-tree-switch-conversion, -mtext-section-literals, -mfix-esp32-psram-cache-issue*]
+  # toolchain libc/libstdc++ headers, which clangd can't find on its own
+  Add:
+    - --target=i686-unknown-elf
+    - -isystem/Users/gtan/.platformio/packages/toolchain-xtensa-esp32/xtensa-esp32-elf/include/c++/8.4.0
+    - -isystem/Users/gtan/.platformio/packages/toolchain-xtensa-esp32/xtensa-esp32-elf/include/c++/8.4.0/xtensa-esp32-elf
+    - -isystem/Users/gtan/.platformio/packages/toolchain-xtensa-esp32/xtensa-esp32-elf/include
